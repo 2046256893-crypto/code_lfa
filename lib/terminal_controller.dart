@@ -1,39 +1,134 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:ui';
-
-import 'package:flutter_pty/flutter_pty.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:global_repository/global_repository.dart';
-import 'package:settings/settings.dart';
 import 'package:xterm/xterm.dart';
 
-import 'config.dart';
-import 'generated/l10n.dart';
-import 'script.dart';
-import 'utils.dart';
+import 'terminal_controller.dart';
+import 'terminal_theme.dart';
 
-class HomeController extends GetxController {
-  bool vsCodeStaring = false;
+class TerminalPage extends StatefulWidget {
+  const TerminalPage({super.key});
 
-  SettingNode privacySetting = 'privacy'.setting;
+  @override
+  State<TerminalPage> createState() => _TerminalPageState();
+}
 
-  Pty? pseudoTerminal;
+class _TerminalPageState extends State<TerminalPage> {
+  final HomeController controller = Get.put(HomeController());
+  final ManjaroTerminalTheme terminalTheme = ManjaroTerminalTheme();
 
-  late Terminal terminal = Terminal(
-    maxLines: 10000,
-    onResize: (width, height, pixelWidth, pixelHeight) {
-      pseudoTerminal?.resize(height, width);
-    },
-    onOutput: (data) {
-      pseudoTerminal?.writeString(data);
-    },
-  );
+  bool visible = kDebugMode;
 
-  bool webviewHasOpen = false;
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
 
-  File progressFile = File('${RuntimeEnvir.tmpPath}/progress');
+    return Scaffold(
+      backgroundColor:
+          visible ? terminalTheme.background : colorScheme.surface,
+      body: SafeArea(
+        child: PopScope(
+          canPop: true,
+          onPopInvokedWithResult: (didPop, result) {
+            final pty = controller.pseudoTerminal;
+            if (pty != null) {
+              try {
+                pty.writeString('\x03');
+              } catch (_) {}
+            }
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              setState(() {
+                visible = !visible;
+              });
+            },
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Visibility(
+                    visible: visible,
+                    maintainState: true,
+                    child: TerminalView(
+                      controller.terminal,
+                      readOnly: false,
+                      backgroundOpacity: 1,
+                      theme: terminalTheme,
+                    ),
+                  ),
+                ),
+
+                Center(
+                  child: Material(
+                    borderRadius: BorderRadius.circular(12.0),
+                    color: colorScheme.surface,
+                    elevation: 3,
+                    child: SizedBox(
+                      width: 300.0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            GetBuilder<HomeController>(
+                              builder: (controller) {
+                                final progress =
+                                    controller.progress.clamp(0.0, 1.0);
+
+                                return Column(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius:
+                                          BorderRadius.circular(3.0),
+                                      child: SizedBox(
+                                        height: 5.0,
+                                        child: LinearProgressIndicator(
+                                          value: progress,
+                                          backgroundColor:
+                                              colorScheme.primary.withValues(
+                                            alpha: 0.20,
+                                          ),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                            colorScheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 8),
+
+                                    Text(
+                                      controller.currentProgress.trim(),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12.0,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
 
   File progressDesFile = File(
     '${RuntimeEnvir.tmpPath}/progress_des',
