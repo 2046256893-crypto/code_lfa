@@ -35,6 +35,135 @@ jobs:
           ls -lh "assets/code-server-${CSVERSION}-linux-arm64.tar.gz"
 
       - name: Set Up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set Up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
+      - name: Flutter Doctor
+        run: flutter doctor -v
+
+      - name: Prepare dependency overrides
+        shell: bash
+        run: |
+          rm -f pubspec.lock
+          rm -f pubspec_overrides.yaml
+
+          printf '%s\n' \
+            'dependency_overrides:' \
+            '  permission_handler: ^11.3.1' \
+            '  device_info_plus: ^10.1.2' \
+            '  intl: 0.20.2' \
+            '  signale:' \
+            '    git:' \
+            '      url: https://github.com/nightmare-space/signale' \
+            '  xterm:' \
+            '    git: https://github.com/TerminalStudio/xterm.dart' \
+            '  global_repository:' \
+            '    git: https://github.com/nightmare-space/global_repository' \
+            '  behavior_api:' \
+            '    git:' \
+            '      url: https://github.com/nightmare-space/empty_package' \
+            '      path: behavior_api' \
+            > pubspec_overrides.yaml
+
+          echo "===== pubspec_overrides.yaml ====="
+          cat pubspec_overrides.yaml
+
+      - name: Patch terminal UI
+        shell: bash
+        run: |
+          sed -i '/flutter_screenutil/d' lib/terminal_page.dart
+
+          perl -0pi -e 's/\b([0-9]+(?:\.[0-9]+)?)\.w\b/$1.0/g' \
+            lib/terminal_page.dart
+
+          perl -0pi -e 's/\bw\(([0-9]+(?:\.[0-9]+)?)\)/$1.0/g' \
+            lib/terminal_page.dart
+
+          sed -i \
+            's/Theme\.of(context)\.colorScheme\.primary\.opacity02/Theme.of(context).colorScheme.primary.withOpacityExact(0.2)/g' \
+            lib/terminal_page.dart
+
+          dart format lib/terminal_page.dart
+
+          echo "===== terminal_page.dart ====="
+          sed -n '1,180p' lib/terminal_page.dart
+
+      - name: Verify terminal UI
+        shell: bash
+        run: |
+          if grep -qE '[0-9]+(\.[0-9]+)?\.w' lib/terminal_page.dart; then
+            echo "ERROR: old .w syntax still exists"
+            exit 1
+          fi
+
+          if grep -q 'flutter_screenutil' lib/terminal_page.dart; then
+            echo "ERROR: flutter_screenutil still exists"
+            exit 1
+          fi
+
+          if grep -q 'opacity02' lib/terminal_page.dart; then
+            echo "ERROR: opacity02 still exists"
+            exit 1
+          fi
+
+          echo "Terminal UI patch OK"
+
+      - name: Install Dependencies
+        shell: bash
+        run: |
+          flutter pub get
+
+      - name: Prepare signing
+        shell: bash
+        run: |
+          KEYSTORE_NAME="codefa-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.jks"
+          KEY_ALIAS="codefa${GITHUB_RUN_ID}${GITHUB_RUN_ATTEMPT}"
+
+          rm -f android/key.properties
+          rm -f "android/app/${KEYSTORE_NAME}"
+
+          keytool -genkeypair \
+            -keystore "android/app/${KEYSTORE_NAME}" \
+            -storepass android \
+            -keypass android \
+            -alias "${KEY_ALIAS}" \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=CodeFA CI,O=CodeFA,C=US"
+
+          printf '%s\n' \
+            'storePassword=android' \
+            'keyPassword=android' \
+            "keyAlias=${KEY_ALIAS}" \
+            "storeFile=${KEYSTORE_NAME}" \
+            > android/key.properties
+
+          echo "===== key.properties ====="
+          cat android/key.properties
+
+      - name: Show Android toolchain
+        shell: bash
+        run: |
+          echo "===== Gradle ====="
+          grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
+
+          echo "===== AGP ====="
+          grep "com.android.application" android/settings.gradle
+
+          echo "===== Kotlin ====="
+          grep "org.jetbrains.kotlin.android" android/settings.gradle
+
+      - name: Build ARM64 A      - name: Set Up Java
         uses: actions/setup-java@v5
         with:
           distribution: temurin
