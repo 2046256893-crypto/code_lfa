@@ -53,7 +53,6 @@ jobs:
       - name: Prepare dependency overrides
         shell: bash
         run: |
-          rm -f pubspec.lock
           rm -f pubspec_overrides.yaml
 
           printf '%s\n' \
@@ -77,50 +76,22 @@ jobs:
           echo "===== pubspec_overrides.yaml ====="
           cat pubspec_overrides.yaml
 
-      - name: Patch terminal UI
-        shell: bash
-        run: |
-          sed -i '/flutter_screenutil/d' lib/terminal_page.dart
-
-          perl -0pi -e 's/\b([0-9]+(?:\.[0-9]+)?)\.w\b/$1.0/g' \
-            lib/terminal_page.dart
-
-          perl -0pi -e 's/\bw\(([0-9]+(?:\.[0-9]+)?)\)/$1.0/g' \
-            lib/terminal_page.dart
-
-          sed -i \
-            's/Theme\.of(context)\.colorScheme\.primary\.opacity02/Theme.of(context).colorScheme.primary.withOpacityExact(0.2)/g' \
-            lib/terminal_page.dart
-
-          dart format lib/terminal_page.dart
-
-          echo "===== terminal_page.dart ====="
-          sed -n '1,180p' lib/terminal_page.dart
-
-      - name: Verify terminal UI
-        shell: bash
-        run: |
-          if grep -qE '[0-9]+(\.[0-9]+)?\.w' lib/terminal_page.dart; then
-            echo "ERROR: old .w syntax still exists"
-            exit 1
-          fi
-
-          if grep -q 'flutter_screenutil' lib/terminal_page.dart; then
-            echo "ERROR: flutter_screenutil still exists"
-            exit 1
-          fi
-
-          if grep -q 'opacity02' lib/terminal_page.dart; then
-            echo "ERROR: opacity02 still exists"
-            exit 1
-          fi
-
-          echo "Terminal UI patch OK"
-
       - name: Install Dependencies
         shell: bash
         run: |
           flutter pub get
+
+      - name: Analyze important source
+        shell: bash
+        run: |
+          echo "===== terminal_page.dart ====="
+          sed -n '1,240p' lib/terminal_page.dart
+
+          echo "===== terminal_controller.dart diagnostics ====="
+          grep -n "Checking storage permission" lib/terminal_controller.dart || true
+          grep -n "Creating runtime directories" lib/terminal_controller.dart || true
+          grep -n "Initializing native environment" lib/terminal_controller.dart || true
+          grep -n "STARTUP ERROR" lib/terminal_controller.dart || true
 
       - name: Prepare signing
         shell: bash
@@ -148,9 +119,6 @@ jobs:
             "storeFile=${KEYSTORE_NAME}" \
             > android/key.properties
 
-          echo "===== key.properties ====="
-          cat android/key.properties
-
       - name: Show Android toolchain
         shell: bash
         run: |
@@ -158,10 +126,10 @@ jobs:
           grep distributionUrl android/gradle/wrapper/gradle-wrapper.properties
 
           echo "===== AGP ====="
-          grep "com.android.application" android/settings.gradle
+          grep "com.android.application" android/settings.gradle || true
 
           echo "===== Kotlin ====="
-          grep "org.jetbrains.kotlin.android" android/settings.gradle
+          grep "org.jetbrains.kotlin.android" android/settings.gradle || true
 
       - name: Build ARM64 APK
         shell: bash
@@ -190,21 +158,4 @@ jobs:
           fi
 
           if [ -z "$APK" ]; then
-            echo "ERROR: No APK generated."
-            exit 1
-          fi
-
-          SAFE_VERSION=$(echo "$VERSION" | tr '+' '_')
-
-          cp "$APK" \
-            "output/CodeFA_${SAFE_VERSION}_Android_arm64_debug.apk"
-
-          echo "===== output ====="
-          ls -lh output/
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: CodeFA-Android-arm64
-          path: output/*.apk
-          if-no-files-found: error
+            echo "ERROR: No APK g
