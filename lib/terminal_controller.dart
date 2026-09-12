@@ -196,22 +196,25 @@ class HomeController extends GetxController {
 
   bool get useCustomCodeServer => Config.codeServerVersion != Config.defaultCodeServerVersion;
 
-  void setProgress(String description) {
-    currentProgress = description;
-    terminal.writeProgress(currentProgress);
-  }
+void setProgress(String description) {
+  currentProgress = description;
+  terminal.writeProgress(currentProgress);
+  update();
+}
+Future<void> loadCodeServer() async {
+  setProgress('[1] Checking storage permission...');
+  await loadCodeVersion();
+  bumpProgress();
 
-  Future<void> loadCodeServer() async {
-    await loadCodeVersion();
-    bumpProgress();
-    // 创建相关文件夹
-    // Create related folders
-    Directory(RuntimeEnvir.tmpPath).createSync(recursive: true);
-    Directory(RuntimeEnvir.homePath).createSync(recursive: true);
-    Directory(RuntimeEnvir.binPath).createSync(recursive: true);
-    bumpProgress();
-    await initEnvir();
-    bumpProgress();
+  setProgress('[2] Creating runtime directories...');
+  Directory(RuntimeEnvir.tmpPath).createSync(recursive: true);
+  Directory(RuntimeEnvir.homePath).createSync(recursive: true);
+  Directory(RuntimeEnvir.binPath).createSync(recursive: true);
+  bumpProgress();
+
+  setProgress('[3] Initializing native environment...');
+  await initEnvir();
+  bumpProgress();
     // -
     setProgress('${S.current.create_terminal_obj}...');
     pseudoTerminal = createPTY(rows: terminal.viewHeight, columns: terminal.viewWidth);
@@ -299,8 +302,14 @@ class HomeController extends GetxController {
           },
         ));
       }
-      syncProgress();
-      loadCodeServer();
+syncProgress();
+
+loadCodeServer().catchError((Object e, StackTrace st) {
+  currentProgress = 'STARTUP ERROR: $e';
+  Log.e(currentProgress);
+  Log.e(st.toString());
+  update();
+});
     });
   }
 }
