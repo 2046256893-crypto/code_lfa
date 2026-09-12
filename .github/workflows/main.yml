@@ -47,10 +47,10 @@ jobs:
 
       - name: Install Dependencies
         run: |
+          rm -f pubspec_overrides.yaml
           rm -f pubspec.lock
           flutter clean
           flutter pub get
-
       - name: Build ARM64 APK
         run: |
           flutter build apk \
