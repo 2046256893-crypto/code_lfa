@@ -38,19 +38,41 @@ jobs:
       - name: Set Up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.4'
+          flutter-version: '3.32.8'
           channel: stable
           cache: true
 
       - name: Flutter Doctor
         run: flutter doctor -v
 
-      - name: Install Dependencies
+      - name: Remove local overrides
         run: |
           rm -f pubspec_overrides.yaml
           rm -f pubspec.lock
-          flutter clean
-          flutter pub get
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Create temporary signing key
+        run: |
+          keytool -genkeypair \
+            -v \
+            -keystore android/app/keystore.jks \
+            -storepass android \
+            -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+          cat > android/key.properties <<EOF
+          storePassword=android
+          keyPassword=android
+          keyAlias=androiddebugkey
+          storeFile=keystore.jks
+          EOF
+
       - name: Build ARM64 APK
         run: |
           flutter build apk \
@@ -59,11 +81,27 @@ jobs:
             --dart-define=VERSION=${VERSION} \
             --dart-define=CSVERSION=${CSVERSION}
 
-      - name: Rename APK
+      - name: Find APK
+        run: |
+          echo "Generated APK files:"
+          find build -type f -name "*.apk" -print
+
+      - name: Prepare APK
         run: |
           mkdir -p output
-          cp build/app/outputs/flutter-apk/app-debug.apk \
-            "output/CodeFA_${VERSION}_Android_arm64_debug.apk"
+
+          APK=$(find build/app/outputs -type f -name "app-debug.apk" | head -n 1)
+
+          if [ -z "$APK" ]; then
+            APK=$(find build/app/outputs -type f -name "*.apk" | head -n 1)
+          fi
+
+          if [ -z "$APK" ]; then
+            echo "No APK generated"
+            exit 1
+          fi
+
+          cp "$APK" "output/CodeFA_${VERSION}_Android_arm64_debug.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
