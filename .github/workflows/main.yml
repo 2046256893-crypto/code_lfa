@@ -46,7 +46,10 @@ jobs:
         run: flutter doctor -v
 
       - name: Install Dependencies
-        run: flutter pub get
+        run: |
+          rm -f pubspec.lock
+          flutter clean
+          flutter pub get
 
       - name: Build ARM64 APK
         run: |
