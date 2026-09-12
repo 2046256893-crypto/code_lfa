@@ -1,9 +1,6 @@
-import 'package:code_lfa/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
-import 'package:global_repository/global_repository.dart';
 import 'package:xterm/xterm.dart';
 
 import 'terminal_controller.dart';
@@ -17,103 +14,112 @@ class TerminalPage extends StatefulWidget {
 }
 
 class _TerminalPageState extends State<TerminalPage> {
-  HomeController controller = Get.put(HomeController());
-  ManjaroTerminalTheme terminalTheme = ManjaroTerminalTheme();
-  bool visible = false || kDebugMode;
+  final HomeController controller = Get.put(HomeController());
+  final ManjaroTerminalTheme terminalTheme = ManjaroTerminalTheme();
+
+  bool visible = kDebugMode;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: visible ? terminalTheme.background : Theme.of(context).colorScheme.surface,
+      backgroundColor:
+          visible ? terminalTheme.background : colorScheme.surface,
       body: SafeArea(
         child: PopScope(
-          onPopInvokedWithResult: (didPop, result) {
-            controller.pseudoTerminal!.writeString('\x03');
-            Get.back();
-          },
           canPop: true,
+          onPopInvokedWithResult: (didPop, result) {
+            final pty = controller.pseudoTerminal;
+
+            if (pty != null) {
+              try {
+                pty.writeString('\x03');
+              } catch (_) {}
+            }
+          },
           child: GestureDetector(
-            onTap: () {
-              visible = !visible;
-              setState(() {});
-            },
             behavior: HitTestBehavior.translucent,
+            onTap: () {
+              setState(() {
+                visible = !visible;
+              });
+            },
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Padding(
-                  padding: EdgeInsets.all(8.w),
+                  padding: const EdgeInsets.all(8.0),
                   child: Visibility(
                     visible: visible,
-                    // IgnorePointer
-                    child: AbsorbPointer(
-                      absorbing: false,
-                      child: TerminalView(
-                        controller.terminal,
-                        readOnly: false,
-                        backgroundOpacity: 1,
-                        theme: ManjaroTerminalTheme(),
-                      ),
+                    maintainState: true,
+                    child: TerminalView(
+                      controller.terminal,
+                      readOnly: false,
+                      backgroundOpacity: 1,
+                      theme: terminalTheme,
                     ),
                   ),
                 ),
                 Center(
                   child: Material(
-                    borderRadius: BorderRadius.circular(12.w),
-                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12.0),
+                    color: colorScheme.surface,
+                    elevation: 3,
                     child: SizedBox(
-                      width: 300.w,
+                      width: 300.0,
                       child: Padding(
-                        padding: EdgeInsets.all(12.w),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Center(
-                              child: RepaintBoundary(
-                                child: LoadingProgress(
-                                  minRadius: 6,
-                                  strokeWidth: 3,
-                                  increaseRadius: 3,
-                                ),
+                            const SizedBox(
+                              width: 28.0,
+                              height: 28.0,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3.0,
                               ),
                             ),
-                            SizedBox(height: 12.w),
-                            GetBuilder<HomeController>(builder: (controller) {
-                              return Column(
-                                children: [
-                                  Stack(
-                                    children: [
-                                      Container(
-                                        height: 5.w,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primary.opacity02,
-                                          borderRadius: BorderRadius.circular(3.w),
+                            const SizedBox(height: 12.0),
+                            GetBuilder<HomeController>(
+                              builder: (controller) {
+                                final double progress =
+                                    controller.progress.clamp(0.0, 1.0);
+
+                                return Column(
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius:
+                                          BorderRadius.circular(3.0),
+                                      child: SizedBox(
+                                        height: 5.0,
+                                        child: LinearProgressIndicator(
+                                          value: progress,
+                                          backgroundColor:
+                                              colorScheme.primary.withOpacity(
+                                            0.2,
+                                          ),
+                                          valueColor:
+                                              AlwaysStoppedAnimation<Color>(
+                                            colorScheme.primary,
+                                          ),
                                         ),
                                       ),
-                                      AnimatedContainer(
-                                        duration: 300.milliseconds,
-                                        height: 5.w,
-                                        width: 300.w * controller.progress,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(context).colorScheme.primary,
-                                          borderRadius: BorderRadius.circular(3.w),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  SizedBox(height: 8.w),
-                                  Text(
-                                    controller.currentProgress.trim(),
-                                    style: TextStyle(
-                                      fontSize: 12.w,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context).colorScheme.onSurface,
                                     ),
-                                  ),
-                                ],
-                              );
-                            }),
+                                    const SizedBox(height: 8.0),
+                                    Text(
+                                      controller.currentProgress.trim(),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12.0,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ),
@@ -121,10 +127,4 @@ class _TerminalPageState extends State<TerminalPage> {
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+        
