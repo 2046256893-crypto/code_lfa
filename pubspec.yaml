@@ -24,10 +24,8 @@ dependencies:
   path: ^1.9.1
 
   # get repo
-  xterm:
-    git:
-      url: https://github.com/TerminalStudio/xterm.dart
-      ref: master
+    xterm:
+    git: https://github.com/TerminalStudio/xterm.dart
   settings:
     git: https://github.com/nightmare-space/settings
   flutter_pty:
