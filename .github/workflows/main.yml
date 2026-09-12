@@ -38,20 +38,39 @@ jobs:
       - name: Set Up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.8'
+          flutter-version: '3.47.4'
           channel: stable
           cache: true
 
       - name: Flutter Doctor
         run: flutter doctor -v
 
-      - name: Remove local overrides
+      - name: Prepare dependency overrides
         run: |
-          rm -f pubspec_overrides.yaml
           rm -f pubspec.lock
 
+          cat > pubspec_overrides.yaml <<'EOF'
+          dependency_overrides:
+            permission_handler: ^11.3.1
+            device_info_plus: ^10.1.2
+            intl: 0.20.2
+            xterm:
+              git: https://github.com/TerminalStudio/xterm.dart
+            global_repository:
+              git: https://github.com/nightmare-space/global_repository
+            behavior_api:
+              git:
+                url: https://github.com/nightmare-space/empty_package
+                path: behavior_api
+          EOF
+
+          echo "===== pubspec_overrides.yaml ====="
+          cat pubspec_overrides.yaml
+
       - name: Install Dependencies
-        run: flutter pub get
+        run: |
+          flutter pub get
+          flutter pub deps
 
       - name: Create temporary signing key
         run: |
@@ -66,7 +85,7 @@ jobs:
             -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
-          cat > android/key.properties <<EOF
+          cat > android/key.properties <<'EOF'
           storePassword=android
           keyPassword=android
           keyAlias=androiddebugkey
