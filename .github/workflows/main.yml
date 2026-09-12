@@ -163,114 +163,48 @@ jobs:
           echo "===== Kotlin ====="
           grep "org.jetbrains.kotlin.android" android/settings.gradle
 
-      - name: Build ARM64 A      - name: Set Up Java
-        uses: actions/setup-java@v5
+      - name: Build ARM64 APK
+        shell: bash
+        run: |
+          flutter build apk \
+            --debug \
+            --target-platform android-arm64 \
+            --dart-define=VERSION="${VERSION}" \
+            --dart-define=CSVERSION="${CSVERSION}"
+
+      - name: Locate APK
+        shell: bash
+        run: |
+          echo "Generated APK files:"
+          find build/app/outputs -type f -name "*.apk" -print
+
+      - name: Prepare Artifact
+        shell: bash
+        run: |
+          mkdir -p output
+
+          APK=$(find build/app/outputs -type f -name "app-debug.apk" | head -n 1)
+
+          if [ -z "$APK" ]; then
+            APK=$(find build/app/outputs -type f -name "*.apk" | head -n 1)
+          fi
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: No APK generated."
+            exit 1
+          fi
+
+          SAFE_VERSION=$(echo "$VERSION" | tr '+' '_')
+
+          cp "$APK" \
+            "output/CodeFA_${SAFE_VERSION}_Android_arm64_debug.apk"
+
+          echo "===== output ====="
+          ls -lh output/
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Set Up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.47.4'
-          channel: stable
-          cache: true
-
-      - name: Flutter Doctor
-        run: flutter doctor -v
-
-      - name: Prepare dependency overrides
-        shell: bash
-        run: |
-          rm -f pubspec.lock
-          rm -f pubspec_overrides.yaml
-
-          printf '%s\n' \
-            'dependency_overrides:' \
-            '  permission_handler: ^11.3.1' \
-            '  device_info_plus: ^10.1.2' \
-            '  intl: 0.20.2' \
-            '  signale:' \
-            '    git:' \
-            '      url: https://github.com/nightmare-space/signale' \
-            '  xterm:' \
-            '    git: https://github.com/TerminalStudio/xterm.dart' \
-            '  global_repository:' \
-            '    git: https://github.com/nightmare-space/global_repository' \
-            '  behavior_api:' \
-            '    git:' \
-            '      url: https://github.com/nightmare-space/empty_package' \
-            '      path: behavior_api' \
-            > pubspec_overrides.yaml
-
-          echo "===== pubspec_overrides.yaml ====="
-          cat pubspec_overrides.yaml
-
-          flutter pub get
-
-      - name: Patch terminal UI
-        shell: bash
-        run: |
-          sed -i '/flutter_screenutil/d' lib/terminal_page.dart
-
-          perl -0pi -e 's/\b([0-9]+(?:\.[0-9]+)?)\.w\b/$1.0/g' \
-            lib/terminal_page.dart
-
-          perl -0pi -e 's/\bw\(([0-9]+(?:\.[0-9]+)?)\)/$1.0/g' \
-            lib/terminal_page.dart
-
-          sed -i \
-            's/Theme\.of(context)\.colorScheme\.primary\.opacity02/Theme.of(context).colorScheme.primary.withOpacityExact(0.2)/g' \
-            lib/terminal_page.dart
-
-      - name: Patch startup diagnostics
-        shell: bash
-        run: |
-          # 1. setProgress 修改文字后立即刷新界面
-          perl -0pi -e 's/terminal\.writeProgress\(currentProgress\);/terminal.writeProgress(currentProgress);\n    update();/' \
-            lib/terminal_controller.dart
-
-          # 2. bumpProgress 不再只依靠 FileSystem watcher
-          perl -0pi -e 's/\n    update\(\);\n  \}\n  \/\/ 监听输出/\n    progress = (progress + 1 \/ step).clamp(0.0, 1.0).toDouble();\n    update();\n  }\n  \/\/ 监听输出/' \
-            lib/terminal_controller.dart
-
-          # 3. 在权限请求之前显示状态
-          perl -0pi -e 's/    await loadCodeVersion\(\);/    setProgress("[1] Checking storage permission...");\n    await loadCodeVersion();/' \
-            lib/terminal_controller.dart
-
-          # 4. 在原生环境初始化之前显示状态
-          perl -0pi -e 's/    await initEnvir\(\);/    setProgress("[2] Initializing native environment...");\n    await initEnvir();/' \
-            lib/terminal_controller.dart
-
-          # 5. 捕获 loadCodeServer 异常，显示到页面，而不是只出现红屏
-          perl -0pi -e 's/      loadCodeServer\(\);/      loadCodeServer().catchError((Object e, StackTrace st) {\n        currentProgress = "STARTUP ERROR: " + e.toString();\n        Log.e(currentProgress);\n        Log.e(st.toString());\n        update();\n      });/' \
-            lib/terminal_controller.dart
-
-          dart format \
-            lib/terminal_page.dart \
-            lib/terminal_controller.dart
-
-      - name: Verify source patches
-        shell: bash
-        run: |
-          echo "===== UI checks ====="
-
-          if grep -qE '[0-9]+(\.[0-9]+)?\.w' lib/terminal_page.dart; then
-            echo "ERROR: old .w syntax still exists"
-            exit 1
-          fi
-
-          if grep -q 'flutter_screenutil' lib/terminal_page.dart; then
-            echo "ERROR: flutter_screenutil still exists"
-            exit 1
-          fi
-
-          if grep -q 'opacity02' lib/terminal_page.dart; then
-            echo "ERROR: opacity02 still exists"
-            exit 1
-          fi
-
-          echo "===== Diagnostic checks ====="
-
-          grep -n "Checking storage permission" \
-          
+          name: CodeFA-Android-arm64
+          path: output/*.apk
+          if-no-files-found: error
