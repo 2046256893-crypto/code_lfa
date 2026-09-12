@@ -79,28 +79,37 @@ jobs:
           flutter pub get
           flutter pub deps
 
-      - name: Create temporary signing key
+            - name: Create temporary signing key
         run: |
-          rm -f android/app/keystore.jks
+          KEYSTORE_NAME="codefa-ci-${GITHUB_RUN_ID}.jks"
+          KEY_ALIAS="codefa-ci-${GITHUB_RUN_ID}"
+
+          rm -f "android/app/${KEYSTORE_NAME}"
           rm -f android/key.properties
 
           keytool -genkeypair \
             -v \
-            -keystore android/app/keystore.jks \
+            -keystore "android/app/${KEYSTORE_NAME}" \
             -storepass android \
             -keypass android \
-            -alias androiddebugkey \
+            -alias "${KEY_ALIAS}" \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+            -dname "CN=CodeFA CI,O=CodeFA,C=US"
 
-          cat > android/key.properties <<'EOF'
+          cat > android/key.properties <<EOF
           storePassword=android
           keyPassword=android
-          keyAlias=androiddebugkey
-          storeFile=keystore.jks
+          keyAlias=${KEY_ALIAS}
+          storeFile=${KEYSTORE_NAME}
           EOF
+
+          echo "===== key.properties ====="
+          cat android/key.properties
+
+          echo "===== generated keystore ====="
+          ls -lh "android/app/${KEYSTORE_NAME}"
 
       - name: Patch Gradle versions
         run: |
